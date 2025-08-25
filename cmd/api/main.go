@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,6 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	cfg.StaticToken = strings.TrimSpace(cfg.StaticToken)
 
 	httpServer := server.NewServer(cfg, logger)
 

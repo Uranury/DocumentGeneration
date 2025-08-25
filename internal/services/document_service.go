@@ -114,7 +114,7 @@ func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBo
 
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
-	part, err := writer.CreateFormFile("files", "doc.html")
+	part, err := writer.CreateFormFile("files", "index.html")
 	if err != nil {
 		return nil, "", "", fmt.Errorf("error creating form file: %w", err)
 	}

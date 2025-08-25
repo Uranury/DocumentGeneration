@@ -6,12 +6,12 @@ import (
 )
 
 type Config struct {
-	ListenAddr        string `env:"LISTEN_ADDR" default:":8080"`
-	PandocPath        string `env:"PANDOC_PATH" required:"true"`
-	PDFConverterURL   string `env:"PDF_CONVERTER_URL" default:"http://localhost:3100"`
-	StaticToken       string `env:"STATIC_TOKEN" default:"default_token"`
-	ServiceContextURL string `env:"SERVICE_CONTEXT_URL" default:"/document-generator"`
-	TemplateDir       string `env:"TEMPLATE_DIR" default:"./templates"`
+	ListenAddr        string `envconfig:"LISTEN_ADDR" default:":8080"`
+	PandocPath        string `envconfig:"PANDOC_PATH" required:"true"`
+	PDFConverterURL   string `envconfig:"PDF_CONVERTER_URL" default:"http://localhost:3000"`
+	StaticToken       string `envconfig:"STATIC_TOKEN" default:"default_token"`
+	ServiceContextURL string `envconfig:"SERVICE_CONTEXT_URL" default:"/document-generator"`
+	TemplateDir       string `envconfig:"TEMPLATE_DIR" default:"./templates"`
 }
 
 func Load() (*Config, error) {

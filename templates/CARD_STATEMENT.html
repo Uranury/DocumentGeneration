@@ -109,16 +109,16 @@
         <td class="table-cell" style="width:12%"><strong>Сумма в валюте карты</strong></td>
         <td class="table-cell" style="width:12%"><strong>Комиссия</strong></td>
       </tr>
-      {% for item in transactions %}
-      <tr>
-        <td class="table-cell">{{item.creationTime}}</td>
-        <td class="table-cell">{{item.processingTime}}</td>
-        <td class="table-cell">{{item.description}}</td>
-        <td class="table-cell">{{item.operationAmount}}</td>
-        <td class="table-cell">{{item.accountAmount}}</td>
-        <td class="table-cell">{{item.comission}}</td>
-      </tr>
-      {% endfor %}
+        {% for item in table1 %}
+        <tr>
+            <td class="table-cell">{{item.dCreationTime}}</td>
+            <td class="table-cell">{{item.dProcessingDate}}</td>
+            <td class="table-cell">{{item.dDescription}}</td>
+            <td class="table-cell">{{item.dOperationAmount}}</td>
+            <td class="table-cell">{{item.dAccountAmount}}</td>
+            <td class="table-cell">{{item.dCommission}}</td>
+        </tr>
+        {% endfor %}
     </table>
     <div class="Normal">
         <b>Заблокированные/ожидающие списания суммы:</b>
@@ -131,15 +131,15 @@
         <td class="table-cell" style="width:21%"><strong>Сумма в валюте операции</strong></td>
         <td class="table-cell" style="width:21%"><strong>Сумма в валюте карты</strong></td>
       </tr>
-      {% for item in waitTransactions %}
-      <tr>
-        <td class="table-cell">{{item.creationTime}}</td>
-        <td class="table-cell">{{item.processingTime}}</td>
-        <td class="table-cell">{{item.description}}</td>
-        <td class="table-cell">{{item.operationAmount}}</td>
-        <td class="table-cell">{{item.accountAmount}}</td>
-      </tr>
-      {% endfor %}
+        {% for item in table2 %}
+        <tr>
+            <td class="table-cell">{{item.creationTime}}</td>
+            <td class="table-cell">{{item.processingDate}}</td>
+            <td class="table-cell">{{item.description}}</td>
+            <td class="table-cell">{{item.operationAmount}}</td>
+            <td class="table-cell">{{item.accountAmount}}</td>
+        </tr>
+        {% endfor %}
     </table>
     <div class="Normal">
         <b>Контакты:</b><br />

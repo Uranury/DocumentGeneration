@@ -7,7 +7,7 @@ services:
       - "8080:8080"
     environment:
       - LISTEN_ADDR=:8080
-      - STATIC_TOKEN=your-secret-token-here
+      - STATIC_TOKEN=${STATIC_TOKEN}
 
       - PDF_CONVERTER_URL=http://gotenberg:3000
 
@@ -30,13 +30,13 @@ services:
   gotenberg:
     image: gotenberg/gotenberg:8
     ports:
-      - "3100:3100"
+      - "3000:3000"
     command:
       - "gotenberg"
       - "--chromium-disable-web-security"
       - "--chromium-allow-list=file:///*"
       - "--chromium-disable-javascript"
-      - "--log-level=INFO"
+      - "--log-level=info"
     networks:
       - app-network
     restart: unless-stopped

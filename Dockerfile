@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23.1-alpine AS builder
 
 # Install pandoc and other dependencies
 RUN apk add --no-cache pandoc git ca-certificates tzdata

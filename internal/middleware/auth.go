@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -26,10 +27,12 @@ func AuthMiddleware(staticToken string) gin.HandlerFunc {
 
 		if token != staticToken {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			log.Printf("the token is invalid: %s", token)
+			log.Printf("the actual token is: %s", staticToken)
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }

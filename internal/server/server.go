@@ -1,6 +1,9 @@
 package server
 
 import (
+	"RBKproject4/internal/handlers"
+	"RBKproject4/internal/renderers"
+	"RBKproject4/internal/services"
 	"RBKproject4/pkg/config"
 	"context"
 	"github.com/gin-gonic/gin"
@@ -10,10 +13,12 @@ import (
 )
 
 type Server struct {
-	Router     *gin.Engine
-	HTTPServer *http.Server
-	Cfg        *config.Config
-	Logger     *slog.Logger
+	Router          *gin.Engine
+	HTTPServer      *http.Server
+	HTTPClient      *http.Client
+	DocumentHandler *handlers.DocumentHandler
+	Cfg             *config.Config
+	Logger          *slog.Logger
 }
 
 func NewServer(cfg *config.Config, logger *slog.Logger) *Server {
@@ -27,12 +32,25 @@ func NewServer(cfg *config.Config, logger *slog.Logger) *Server {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	return &Server{
-		Router:     router,
-		Cfg:        cfg,
-		Logger:     logger,
-		HTTPServer: httpServer,
+	httpClient := &http.Client{
+		Timeout: 15 * time.Second,
 	}
+
+	templateRenderer := renderers.NewPongo2Renderer(cfg.TemplateDir)
+	newDocService := services.NewDocumentService(logger, templateRenderer, cfg.PandocPath, cfg.PDFConverterURL, httpClient)
+	newDocHandler := handlers.NewDocumentHandler(newDocService)
+
+	server := &Server{
+		Router:          router,
+		Cfg:             cfg,
+		Logger:          logger,
+		HTTPServer:      httpServer,
+		HTTPClient:      httpClient,
+		DocumentHandler: newDocHandler,
+	}
+
+	server.setupRoutes()
+	return server
 }
 
 func (s *Server) Run() error {

@@ -1,0 +1,52 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - LISTEN_ADDR=:8080
+      - STATIC_TOKEN=your-secret-token-here
+
+      - PDF_CONVERTER_URL=http://gotenberg:3000
+
+      - PANDOC_PATH=/usr/bin/pandoc
+
+      - TEMPLATE_DIR=/root/templates
+    depends_on:
+      gotenberg:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports:
+      - "3100:3100"
+    command:
+      - "gotenberg"
+      - "--chromium-disable-web-security"
+      - "--chromium-allow-list=file:///*"
+      - "--chromium-disable-javascript"
+      - "--log-level=INFO"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  app-network:
+    driver: bridge

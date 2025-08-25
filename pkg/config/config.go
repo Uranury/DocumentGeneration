@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	ListenAddr        string `env:"LISTEN_ADDR" default:":8080"`
+	PandocPath        string `env:"PANDOC_PATH" required:"true"`
 	PDFConverterURL   string `env:"PDF_CONVERTER_URL" default:"http://localhost:3100"`
 	StaticToken       string `env:"STATIC_TOKEN" default:"default_token"`
 	ServiceContextURL string `env:"SERVICE_CONTEXT_URL" default:"/document-generator"`

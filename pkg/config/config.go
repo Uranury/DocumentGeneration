@@ -6,8 +6,11 @@ import (
 )
 
 type Config struct {
-	ListenAddr string `env:"LISTEN_ADDR" default:":8080"`
-	JWTSecret  string `env:"JWT_SECRET" required:"true"`
+	ListenAddr        string `env:"LISTEN_ADDR" default:":8080"`
+	PDFConverterURL   string `env:"PDF_CONVERTER_URL" default:"http://localhost:3100"`
+	StaticToken       string `env:"STATIC_TOKEN" default:"default_token"`
+	ServiceContextURL string `env:"SERVICE_CONTEXT_URL" default:"/document-generator"`
+	TemplateDir       string `env:"TEMPLATE_DIR" default:"./TEMPLATE_DIR"`
 }
 
 func Load() (*Config, error) {

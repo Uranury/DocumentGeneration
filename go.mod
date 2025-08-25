@@ -3,8 +3,8 @@ module RBKproject4
 go 1.23.1
 
 require (
+	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/gin-gonic/gin v1.10.1
-	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/kelseyhightower/envconfig v1.4.0
 )
 

@@ -1,11 +1,5 @@
 package models
 
-type RequestBody struct {
-	Code   string       `json:"code"`
-	Format string       `json:"format"`
-	Data   StatementDTO `json:"data"`
-}
-
 type StatementDTO struct {
 	Date              string              `json:"date"`
 	AccountNumber     string              `json:"accountNumber"`

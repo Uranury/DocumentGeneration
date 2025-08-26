@@ -3,7 +3,6 @@ package handlers
 import (
 	"RBKproject4/internal/models"
 	"RBKproject4/internal/services"
-	"context"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -16,35 +15,88 @@ func NewDocumentHandler(svc *services.DocumentService) *DocumentHandler {
 	return &DocumentHandler{svc: svc}
 }
 
-func (h *DocumentHandler) generate(
-	c *gin.Context,
-	generateFunc func(ctx context.Context, req *models.RequestBody) ([]byte, services.DocumentFormat, string, error),
-) {
+func (h *DocumentHandler) GenerateDocument(c *gin.Context) {
 	var req models.RequestBody
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	doc, format, filename, err := generateFunc(c.Request.Context(), &req)
+	var (
+		document *models.Document
+		err      error
+	)
+
+	switch req.Format {
+	case "pdf":
+		document, err = h.svc.GeneratePDF(c.Request.Context(), &req)
+	case "docx":
+		document, err = h.svc.GenerateDocx(c.Request.Context(), &req)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported format"})
+		return
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.Header("Content-Type", string(format))
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Data(http.StatusOK, string(format), doc)
-}
-
-func (h *DocumentHandler) GenerateDocx(c *gin.Context) {
-	h.generate(c, h.svc.GenerateDocx)
-}
-
-func (h *DocumentHandler) GeneratePDF(c *gin.Context) {
-	h.generate(c, h.svc.GeneratePDF)
+	c.Header("Content-Type", string(document.Format))
+	c.Header("Content-Disposition", "attachment; filename="+document.Filename)
+	c.Data(http.StatusOK, string(document.Format), document.Data)
 }
 
 func (h *DocumentHandler) GenerateHTML(c *gin.Context) {
-	h.generate(c, h.svc.GenerateHTML)
+	var req models.RequestBody
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var (
+		document *models.Document
+		err      error
+	)
+
+	switch req.Format {
+	case "pdf":
+		document, err = h.svc.GeneratePDF(c.Request.Context(), &req)
+	case "html":
+		document, err = h.svc.GenerateHTML(c.Request.Context(), &req)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported format"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", string(document.Format))
+	c.Header("Content-Disposition", "attachment; filename="+document.Filename)
+	c.Data(http.StatusOK, string(document.Format), document.Data)
+}
+
+func (h *DocumentHandler) GenerateXlsx(c *gin.Context) {
+	var req models.RequestBody
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Format != "xlsx" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported format"})
+	}
+
+	document, err := h.svc.GenerateXLSX(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", string(document.Format))
+	c.Header("Content-Disposition", "attachment; filename="+document.Filename)
+	c.Data(http.StatusOK, string(document.Format), document.Data)
 }

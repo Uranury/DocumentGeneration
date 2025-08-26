@@ -15,14 +15,6 @@ import (
 	"os/exec"
 )
 
-type DocumentFormat string
-
-const (
-	FormatDOCX DocumentFormat = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-	FormatPDF  DocumentFormat = "application/pdf"
-	FormatHTML DocumentFormat = "text/html"
-)
-
 type DocumentService struct {
 	templateRenderer renderers.TemplateRenderer
 	pandocPath       string
@@ -47,20 +39,20 @@ func toMap(data any) (map[string]interface{}, error) {
 	return m, nil
 }
 
-func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestBody) ([]byte, DocumentFormat, string, error) {
+func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
 	dataMap, err := toMap(req.Data)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error converting data to map: %w", err)
+		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}
 
 	renderedHTML, err := s.templateRenderer.Render(req.Code, dataMap)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error rendering html: %w", err)
+		return nil, fmt.Errorf("error rendering html: %w", err)
 	}
 
 	tmpHTML, err := os.CreateTemp("", "*.html")
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error creating temp file: %w", err)
+		return nil, fmt.Errorf("error creating temp file: %w", err)
 	}
 	defer func() {
 		if err := os.Remove(tmpHTML.Name()); err != nil {
@@ -70,7 +62,7 @@ func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestB
 
 	tmpDocx, err := os.CreateTemp("", "*.docx")
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error creating temp file: %w", err)
+		return nil, fmt.Errorf("error creating temp file: %w", err)
 	}
 
 	defer func() {
@@ -80,68 +72,69 @@ func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestB
 	}()
 
 	if err := os.WriteFile(tmpHTML.Name(), []byte(renderedHTML), 0644); err != nil {
-		return nil, "", "", fmt.Errorf("error writing to temp file: %w", err)
+		return nil, fmt.Errorf("error writing to temp file: %w", err)
 	}
 
 	cmd := exec.CommandContext(ctx, s.pandocPath, tmpHTML.Name(), "-o", tmpDocx.Name())
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, "", "", fmt.Errorf("pandoc failed: %w, stderr: %s", err, stderr.String())
+		return nil, fmt.Errorf("pandoc failed: %w, stderr: %s", err, stderr.String())
 	}
 
 	data, err := os.ReadFile(tmpDocx.Name())
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error reading temp file: %w", err)
+		return nil, fmt.Errorf("error reading temp file: %w", err)
 	}
 
-	return data,
-		FormatDOCX,
-		"document.docx",
-		nil
+	return &models.Document{
+		Data:     data,
+		Format:   models.FormatDOCX,
+		Filename: "document.docx",
+	}, nil
 }
 
-func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBody) ([]byte, DocumentFormat, string, error) {
+func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
 	dataMap, err := toMap(req.Data)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error converting data to map: %w", err)
+		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}
 
 	renderedHTML, err := s.templateRenderer.Render(req.Code, dataMap)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error rendering html: %w", err)
+		return nil, fmt.Errorf("error rendering html: %w", err)
 	}
 
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
 	part, err := writer.CreateFormFile("files", "index.html")
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error creating form file: %w", err)
+		return nil, fmt.Errorf("error creating form file: %w", err)
 	}
 
 	_, err = part.Write([]byte(renderedHTML))
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error writing to form file: %w", err)
+		return nil, fmt.Errorf("error writing to form file: %w", err)
 	}
 
 	if err := writer.Close(); err != nil {
-		return nil, "", "", fmt.Errorf("error closing form file: %w", err)
+		return nil, fmt.Errorf("error closing form file: %w", err)
 	}
 
 	newReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.gotenbergURL+"/forms/chromium/convert/html", buf)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	newReq.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.client.Do(newReq)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error making request: %w", err)
+		return nil, fmt.Errorf("error making request: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", "", fmt.Errorf("gotenberg returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("gotenberg returned status %d", resp.StatusCode)
 	}
 
 	defer func() {
@@ -152,22 +145,30 @@ func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBo
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error reading response body: %w", err)
+		return nil, fmt.Errorf("error reading response body: %w", err)
 	}
 
-	return data, FormatPDF, "document.pdf", nil
+	return &models.Document{
+		Data:     data,
+		Format:   models.FormatPDF,
+		Filename: "document.pdf",
+	}, nil
 }
 
-func (s *DocumentService) GenerateHTML(_ context.Context, req *models.RequestBody) ([]byte, DocumentFormat, string, error) {
+func (s *DocumentService) GenerateHTML(_ context.Context, req *models.RequestBody) (*models.Document, error) {
 	dataMap, err := toMap(req.Data)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error converting data to map: %w", err)
+		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}
 
 	renderedHTML, err := s.templateRenderer.Render(req.Code, dataMap)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("error rendering html: %w", err)
+		return nil, fmt.Errorf("error rendering html: %w", err)
 	}
 
-	return []byte(renderedHTML), FormatHTML, "document.html", nil
+	return &models.Document{
+		Data:     []byte(renderedHTML),
+		Format:   models.FormatHTML,
+		Filename: "document.html",
+	}, nil
 }

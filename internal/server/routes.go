@@ -15,7 +15,7 @@ func (s *Server) setupRoutes() {
 	docGeneration := api.Group(s.Cfg.ServiceContextURL)
 	docGeneration.Use(middleware.AuthMiddleware(s.Cfg.StaticToken))
 
-	docGeneration.POST("/generate-docx", s.DocumentHandler.GenerateDocx)
-	docGeneration.POST("/generate-pdf", s.DocumentHandler.GeneratePDF)
+	docGeneration.POST("/generate-docx", s.DocumentHandler.GenerateDocument)
+	docGeneration.POST("/generate-xlsx", s.DocumentHandler.GenerateXlsx)
 	docGeneration.POST("/generate-html", s.DocumentHandler.GenerateHTML)
 }

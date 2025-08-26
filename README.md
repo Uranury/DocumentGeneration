@@ -484,7 +484,7 @@ Proprietary software © Bank RBK. For internal use only.
 ## CARD_STATEMENT_EXCEL - Выписка по карте(xlsx)
 
 - `code` — CARD_STATEMENT
-- `format` — формат генерируемого файла (**xlsx**, **pdf**).
+- `format` — формат генерируемого файла (**xlsx**).
 - `data` — структура JSON метаданных должны быть следующей:
 ```json
 {
@@ -556,7 +556,7 @@ Proprietary software © Bank RBK. For internal use only.
 ## EXTENDED_STATEMENT_EXCEL - Выписка по движениям средств(xlsx)
 
 - `code` — EXTENDED_STATEMENT_EXCEL
-- `format` — формат генерируемого файла (**xlsx**, **pdf**).
+- `format` — формат генерируемого файла (**xlsx**).
 - `data` — структура JSON метаданных должны быть следующей:
 ```json
 {

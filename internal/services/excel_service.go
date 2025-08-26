@@ -4,54 +4,46 @@ import (
 	"RBKproject4/internal/models"
 	"context"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/xuri/excelize/v2"
 	"regexp"
-	"strconv"
 	"strings"
+
+	"github.com/xuri/excelize/v2"
 )
 
-// TODO: Change formatting, handle unhandled errors
-
 func (s *DocumentService) GenerateXLSX(_ context.Context, req *models.RequestBody) (*models.Document, error) {
-	// First, render HTML template like other methods
+	// Convert data to map for easier processing
 	dataMap, err := toMap(req.Data)
 	if err != nil {
 		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}
 
-	renderedHTML, err := s.templateRenderer.Render(req.Code, dataMap)
-	if err != nil {
-		return nil, fmt.Errorf("error rendering html: %w", err)
+	// Load the Excel template based on the code
+	templatePath := s.getXLSXTemplatePath(req.Code)
+	if templatePath == "" {
+		return nil, fmt.Errorf("no XLSX template found for code: %s", req.Code)
 	}
 
-	// Create new Excel file
-	f := excelize.NewFile()
+	// Load the template file
+	f, err := excelize.OpenFile(templatePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening XLSX template: %w", err)
+	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			s.logger.Warn("Failed to close Excel file")
+			s.logger.Warn("Failed to close Excel template file")
 		}
 	}()
 
-	// Parse HTML
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(renderedHTML))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing HTML: %w", err)
+	// Get the active sheet (assuming single sheet templates)
+	sheetName := f.GetSheetName(0)
+	if sheetName == "" {
+		return nil, fmt.Errorf("no active sheet found in template")
 	}
 
-	// Create main worksheet
-	sheetName := "Document"
-	index, err := f.NewSheet(sheetName)
+	// Process the template
+	err = s.processXLSXTemplate(f, sheetName, dataMap)
 	if err != nil {
-		return nil, fmt.Errorf("error creating sheet: %w", err)
-	}
-	f.SetActiveSheet(index)
-	f.DeleteSheet("Sheet1")
-
-	// Convert HTML structure to Excel
-	err = s.htmlToExcel(f, sheetName, doc)
-	if err != nil {
-		return nil, fmt.Errorf("error converting HTML to Excel: %w", err)
+		return nil, fmt.Errorf("error processing XLSX template: %w", err)
 	}
 
 	// Save to buffer
@@ -63,166 +55,294 @@ func (s *DocumentService) GenerateXLSX(_ context.Context, req *models.RequestBod
 	return &models.Document{
 		Data:     buf.Bytes(),
 		Format:   models.FormatXLSX,
-		Filename: "document.xlsx",
+		Filename: s.getOutputFilename(req.Code),
 	}, nil
 }
 
-// Generic method to convert any HTML structure to Excel
-func (s *DocumentService) htmlToExcel(f *excelize.File, sheetName string, doc *goquery.Document) error {
-	currentRow := 1
+// Get template path based on code
+func (s *DocumentService) getXLSXTemplatePath(code string) string {
+	// You can configure this path or make it configurable
+	basePath := "templates/"
+	switch code {
+	case "CARD_STATEMENT":
+		return basePath + "CARD_STATEMENT_EXCEL.xlsx"
+	case "EXTENDED_STATEMENT_EXCEL":
+		return basePath + "EXTENDED_STATEMENT.xlsx"
+	default:
+		return ""
+	}
+}
 
-	// Process the body content sequentially
-	doc.Find("body").Children().Each(func(i int, element *goquery.Selection) {
-		currentRow = s.processElement(f, sheetName, element, currentRow, 0)
-	})
+// Get output filename based on code
+func (s *DocumentService) getOutputFilename(code string) string {
+	switch code {
+	case "CARD_STATEMENT":
+		return "card_statement.xlsx"
+	case "EXTENDED_STATEMENT_EXCEL":
+		return "extended_statement.xlsx"
+	default:
+		return "document.xlsx"
+	}
+}
 
-	// Auto-adjust column widths
-	s.autoSizeColumns(f, sheetName, currentRow)
+// Process XLSX template with data
+func (s *DocumentService) processXLSXTemplate(f *excelize.File, sheetName string, dataMap map[string]interface{}) error {
+	// First pass: replace simple placeholders
+	err := s.replacePlaceholders(f, sheetName, dataMap)
+	if err != nil {
+		return fmt.Errorf("error replacing placeholders: %w", err)
+	}
+
+	// Second pass: handle table data (arrays)
+	err = s.processTableData(f, sheetName, dataMap)
+	if err != nil {
+		return fmt.Errorf("error processing table data: %w", err)
+	}
 
 	return nil
 }
 
-// Process any HTML element recursively
-func (s *DocumentService) processElement(f *excelize.File, sheetName string, element *goquery.Selection, row, level int) int {
-	tagName := goquery.NodeName(element)
-
-	switch tagName {
-	case "table":
-		return s.processTable(f, sheetName, element, row)
-	case "h1", "h2", "h3", "h4", "h5", "h6":
-		return s.processHeading(f, sheetName, element, row)
-	case "p", "div", "span":
-		return s.processTextElement(f, sheetName, element, row, level)
-	case "ul", "ol":
-		return s.processList(f, sheetName, element, row, level)
-	default:
-		// For other elements, process their children
-		currentRow := row
-		element.Children().Each(func(i int, child *goquery.Selection) {
-			currentRow = s.processElement(f, sheetName, child, currentRow, level)
-		})
-		return currentRow
+// Replace simple {{placeholder}} values
+func (s *DocumentService) replacePlaceholders(f *excelize.File, sheetName string, dataMap map[string]interface{}) error {
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return fmt.Errorf("error getting rows: %w", err)
 	}
-}
 
-// Process table elements
-func (s *DocumentService) processTable(f *excelize.File, sheetName string, table *goquery.Selection, startRow int) int {
-	currentRow := startRow
+	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)
 
-	// Process table headers
-	table.Find("thead tr").Each(func(i int, row *goquery.Selection) {
-		colIndex := 0
-		row.Find("th, td").Each(func(j int, cell *goquery.Selection) {
-			cellText := strings.TrimSpace(cell.Text())
-			if cellText != "" {
-				cellAddr := s.getCellAddress(colIndex, currentRow)
-				f.SetCellValue(sheetName, cellAddr, cellText)
-				s.setBoldStyle(f, sheetName, cellAddr)
+	for rowIndex, row := range rows {
+		for colIndex, cellValue := range row {
+			if cellValue == "" {
+				continue
 			}
-			colIndex++
-		})
-		currentRow++
-	})
 
-	// Process table body
-	table.Find("tbody tr, tr:not(thead tr)").Each(func(i int, row *goquery.Selection) {
-		// Skip if this row was already processed as header
-		if table.Find("thead").Length() > 0 && i == 0 && row.Closest("thead").Length() > 0 {
-			return
-		}
+			// Find and replace all placeholders in this cell
+			newValue := placeholderRegex.ReplaceAllStringFunc(cellValue, func(match string) string {
+				// Extract placeholder name
+				placeholder := placeholderRegex.FindStringSubmatch(match)
+				if len(placeholder) < 2 {
+					return match
+				}
 
-		colIndex := 0
-		row.Find("td, th").Each(func(j int, cell *goquery.Selection) {
-			cellText := strings.TrimSpace(cell.Text())
-			if cellText != "" {
-				cellAddr := s.getCellAddress(colIndex, currentRow)
+				key := placeholder[1]
 
-				// Try to parse as number
-				if num, err := s.smartParseNumber(cellText); err == nil {
-					f.SetCellValue(sheetName, cellAddr, num)
-				} else {
-					f.SetCellValue(sheetName, cellAddr, cellText)
+				// Handle nested keys like "client.name"
+				value := s.getNestedValue(dataMap, key)
+				if value != nil {
+					return fmt.Sprintf("%v", value)
+				}
+
+				return match // Keep original if not found
+			})
+
+			// Update cell if changed
+			if newValue != cellValue {
+				cellAddr := s.getCellAddress(colIndex, rowIndex+1) // Excel is 1-indexed
+				if err := f.SetCellValue(sheetName, cellAddr, newValue); err != nil {
+					return fmt.Errorf("error setting cell value: %w", err)
 				}
 			}
-			colIndex++
-		})
-		currentRow++
-	})
-
-	return currentRow + 1 // Add spacing after table
-}
-
-// Process heading elements
-func (s *DocumentService) processHeading(f *excelize.File, sheetName string, heading *goquery.Selection, row int) int {
-	text := strings.TrimSpace(heading.Text())
-	if text == "" {
-		return row
+		}
 	}
 
-	f.SetCellValue(sheetName, s.getCellAddress(0, row), text)
-	s.setBoldStyle(f, sheetName, s.getCellAddress(0, row))
-
-	return row + 2 // Add spacing after heading
+	return nil
 }
 
-// Process text elements (p, div, span)
-func (s *DocumentService) processTextElement(f *excelize.File, sheetName string, element *goquery.Selection, row, level int) int {
-	text := strings.TrimSpace(element.Text())
-	if text == "" {
-		return row
+// Process table data (arrays) with row duplication
+func (s *DocumentService) processTableData(f *excelize.File, sheetName string, dataMap map[string]interface{}) error {
+	// Find table placeholders like {{table1.field}}
+	tablePlaceholders := s.findTablePlaceholders(f, sheetName)
+
+	for tableName, placeholders := range tablePlaceholders {
+		tableData, exists := dataMap[tableName]
+		if !exists {
+			continue
+		}
+
+		// Convert to slice of maps
+		tableSlice, ok := s.convertToTableSlice(tableData)
+		if !ok {
+			s.logger.Warn(fmt.Sprintf("Table data for '%s' is not an array", tableName))
+			continue
+		}
+
+		if len(tableSlice) == 0 {
+			continue
+		}
+
+		// Process this table
+		err := s.processTable(f, sheetName, tableName, placeholders, tableSlice)
+		if err != nil {
+			return fmt.Errorf("error processing table %s: %w", tableName, err)
+		}
 	}
 
-	// Check if this looks like a key-value pair
-	if strings.Contains(text, ":") && !strings.Contains(text, "\n") {
-		parts := strings.SplitN(text, ":", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
+	return nil
+}
 
-			f.SetCellValue(sheetName, s.getCellAddress(level, row), key+":")
-			s.setBoldStyle(f, sheetName, s.getCellAddress(level, row))
+// Find table placeholders like {{tableName.field}}
+func (s *DocumentService) findTablePlaceholders(f *excelize.File, sheetName string) map[string]map[string]CellLocation {
+	result := make(map[string]map[string]CellLocation)
+	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s*\}\}`)
 
-			// Try to parse value as number
-			if num, err := s.smartParseNumber(value); err == nil {
-				f.SetCellValue(sheetName, s.getCellAddress(level+1, row), num)
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return result
+	}
+
+	for rowIndex, row := range rows {
+		for colIndex, cellValue := range row {
+			if cellValue == "" {
+				continue
+			}
+
+			matches := placeholderRegex.FindStringSubmatch(cellValue)
+			if len(matches) >= 3 {
+				tableName := matches[1]
+				fieldName := matches[2]
+
+				if result[tableName] == nil {
+					result[tableName] = make(map[string]CellLocation)
+				}
+
+				result[tableName][fieldName] = CellLocation{
+					Row: rowIndex + 1, // Excel is 1-indexed
+					Col: colIndex,
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+type CellLocation struct {
+	Row int
+	Col int
+}
+
+// Process a single table by duplicating template rows
+func (s *DocumentService) processTable(f *excelize.File, sheetName, _ string, placeholders map[string]CellLocation, tableData []map[string]interface{}) error {
+	if len(placeholders) == 0 || len(tableData) == 0 {
+		return nil
+	}
+
+	// Find the template row (minimum row number with placeholders)
+	templateRow := int(^uint(0) >> 1) // Max int
+	for _, loc := range placeholders {
+		if loc.Row < templateRow {
+			templateRow = loc.Row
+		}
+	}
+
+	// Insert additional rows if needed
+	rowsToInsert := len(tableData) - 1
+	if rowsToInsert > 0 {
+		err := f.InsertRows(sheetName, templateRow+1, rowsToInsert)
+		if err != nil {
+			return fmt.Errorf("error inserting rows: %w", err)
+		}
+	}
+
+	// Fill data into all rows
+	for rowIdx, rowData := range tableData {
+		currentRow := templateRow + rowIdx
+
+		// Copy formatting from template row to new rows
+		if rowIdx > 0 {
+			err := s.copyRowFormatting(f, sheetName, templateRow, currentRow, placeholders)
+			if err != nil {
+				s.logger.Warn(fmt.Sprintf("Failed to copy formatting for row %d: %v", currentRow, err))
+			}
+		}
+
+		// Fill data
+		for fieldName, location := range placeholders {
+			if value, exists := rowData[fieldName]; exists {
+				cellAddr := s.getCellAddress(location.Col, currentRow)
+				if err := f.SetCellValue(sheetName, cellAddr, value); err != nil {
+					s.logger.Warn(fmt.Sprintf("Failed to set cell value for row %d: %v", currentRow, err))
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// Copy formatting from source row to target row
+func (s *DocumentService) copyRowFormatting(f *excelize.File, sheetName string, sourceRow, targetRow int, placeholders map[string]CellLocation) error {
+	for _, location := range placeholders {
+		sourceAddr := s.getCellAddress(location.Col, sourceRow)
+		targetAddr := s.getCellAddress(location.Col, targetRow)
+
+		// Get source cell style
+		styleID, err := f.GetCellStyle(sheetName, sourceAddr)
+		if err != nil {
+			continue // Skip if can't get style
+		}
+
+		// Apply style to target cell
+		err = f.SetCellStyle(sheetName, targetAddr, targetAddr, styleID)
+		if err != nil {
+			continue // Skip if can't set style
+		}
+	}
+	return nil
+}
+
+// Helper: get nested value from map using dot notation
+func (s *DocumentService) getNestedValue(data map[string]interface{}, key string) interface{} {
+	keys := strings.Split(key, ".")
+	current := data
+
+	for i, k := range keys {
+		if i == len(keys)-1 {
+			// Last key
+			return current[k]
+		}
+
+		// Navigate deeper
+		if next, ok := current[k].(map[string]interface{}); ok {
+			current = next
+		} else {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+// Helper: convert interface{} to slice of maps
+func (s *DocumentService) convertToTableSlice(data interface{}) ([]map[string]interface{}, bool) {
+	switch v := data.(type) {
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				result = append(result, itemMap)
 			} else {
-				f.SetCellValue(sheetName, s.getCellAddress(level+1, row), value)
+				// Try to convert to map
+				if converted, err := toMap(item); err == nil {
+					result = append(result, converted)
+				}
 			}
-
-			return row + 1
 		}
+		return result, true
+	case []map[string]interface{}:
+		return v, true
+	default:
+		return nil, false
 	}
-
-	// Regular text
-	f.SetCellValue(sheetName, s.getCellAddress(level, row), text)
-	return row + 1
 }
 
-// Process list elements
-func (s *DocumentService) processList(f *excelize.File, sheetName string, list *goquery.Selection, row, level int) int {
-	currentRow := row
-
-	list.Find("li").Each(func(i int, item *goquery.Selection) {
-		text := strings.TrimSpace(item.Text())
-		if text != "" {
-			prefix := "• "
-			if goquery.NodeName(list) == "ol" {
-				prefix = fmt.Sprintf("%d. ", i+1)
-			}
-			f.SetCellValue(sheetName, s.getCellAddress(level, currentRow), prefix+text)
-			currentRow++
-		}
-	})
-
-	return currentRow + 1
-}
-
-// Helper method to get cell address (A1, B2, etc.)
+// Helper: get cell address like A1, B2, etc.
 func (s *DocumentService) getCellAddress(col, row int) string {
 	return fmt.Sprintf("%s%d", s.getColumnName(col), row)
 }
 
-// Helper method to get column name (A, B, C, ..., Z, AA, AB, etc.)
+// Helper: get column name (A, B, C, ..., Z, AA, AB, etc.)
 func (s *DocumentService) getColumnName(index int) string {
 	name := ""
 	for index >= 0 {
@@ -230,70 +350,4 @@ func (s *DocumentService) getColumnName(index int) string {
 		index = index/26 - 1
 	}
 	return name
-}
-
-// Smart number parsing that handles various formats
-func (s *DocumentService) smartParseNumber(text string) (float64, error) {
-	// Remove common non-numeric characters but keep decimal separators
-	cleaned := regexp.MustCompile(`[^\d\.\-\,\+]`).ReplaceAllString(text, "")
-
-	if cleaned == "" {
-		return 0, fmt.Errorf("no numeric content")
-	}
-
-	// Handle comma as decimal separator (European format)
-	if strings.Count(cleaned, ",") == 1 && strings.Count(cleaned, ".") == 0 {
-		cleaned = strings.Replace(cleaned, ",", ".", 1)
-	}
-
-	// Handle thousand separators
-	if strings.Count(cleaned, ",") > 1 || (strings.Contains(cleaned, ",") && strings.Contains(cleaned, ".")) {
-		// Remove commas (thousand separators)
-		cleaned = strings.Replace(cleaned, ",", "", -1)
-	}
-
-	return strconv.ParseFloat(cleaned, 64)
-}
-
-// Set bold style for cells
-func (s *DocumentService) setBoldStyle(f *excelize.File, sheetName, cell string) {
-	style, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{
-			Bold: true,
-		},
-	})
-	f.SetCellStyle(sheetName, cell, cell, style)
-}
-
-// Auto-size columns based on content
-func (s *DocumentService) autoSizeColumns(f *excelize.File, sheetName string, maxRow int) {
-	// Get used range to determine how many columns to adjust
-	maxCol := 10 // Default to first 10 columns, adjust as needed
-
-	for col := 0; col < maxCol; col++ {
-		colName := s.getColumnName(col)
-		maxWidth := 8.0 // Minimum width
-
-		// Sample a few rows to estimate width
-		sampleRows := []int{1, maxRow / 4, maxRow / 2, 3 * maxRow / 4, maxRow}
-		for _, row := range sampleRows {
-			if row > 0 {
-				cellValue, _ := f.GetCellValue(sheetName, fmt.Sprintf("%s%d", colName, row))
-				if cellValue != "" {
-					// Rough estimate: each character is about 1.2 units wide
-					width := float64(len(cellValue)) * 1.2
-					if width > maxWidth {
-						maxWidth = width
-					}
-				}
-			}
-		}
-
-		// Cap maximum width
-		if maxWidth > 50 {
-			maxWidth = 50
-		}
-
-		f.SetColWidth(sheetName, colName, colName, maxWidth)
-	}
 }

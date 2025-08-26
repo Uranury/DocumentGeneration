@@ -109,7 +109,7 @@ func (s *DocumentService) replacePlaceholders(f *excelize.File, sheetName string
 		return fmt.Errorf("error getting rows: %w", err)
 	}
 
-	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)
+	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*}}`)
 
 	for rowIndex, row := range rows {
 		for colIndex, cellValue := range row {
@@ -184,7 +184,7 @@ func (s *DocumentService) processTableData(f *excelize.File, sheetName string, d
 // Find table placeholders like {{tableName.field}}
 func (s *DocumentService) findTablePlaceholders(f *excelize.File, sheetName string) map[string]map[string]CellLocation {
 	result := make(map[string]map[string]CellLocation)
-	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s*\}\}`)
+	placeholderRegex := regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s*}}`)
 
 	rows, err := f.GetRows(sheetName)
 	if err != nil {

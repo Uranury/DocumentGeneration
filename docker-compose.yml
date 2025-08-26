@@ -8,11 +8,7 @@ services:
     environment:
       - LISTEN_ADDR=:8080
       - STATIC_TOKEN=${STATIC_TOKEN}
-
       - PDF_CONVERTER_URL=http://gotenberg:3000
-
-      - LIBRE_OFFICE_PATH=/usr/bin/soffice
-
       - TEMPLATE_DIR=/root/templates
     depends_on:
       gotenberg:

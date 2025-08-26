@@ -11,7 +11,7 @@ services:
 
       - PDF_CONVERTER_URL=http://gotenberg:3000
 
-      - PANDOC_PATH=/usr/bin/pandoc
+      - LIBRE_OFFICE_PATH=/usr/bin/soffice
 
       - TEMPLATE_DIR=/root/templates
     depends_on:

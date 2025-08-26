@@ -13,18 +13,20 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 type DocumentService struct {
 	templateRenderer renderers.TemplateRenderer
-	pandocPath       string
+	libreOfficePath  string
 	gotenbergURL     string
 	client           *http.Client
 	logger           *slog.Logger
 }
 
-func NewDocumentService(logger *slog.Logger, templateRenderer renderers.TemplateRenderer, pandocPath string, gotenbergURL string, client *http.Client) *DocumentService {
-	return &DocumentService{logger: logger, templateRenderer: templateRenderer, pandocPath: pandocPath, gotenbergURL: gotenbergURL, client: client}
+func NewDocumentService(logger *slog.Logger, templateRenderer renderers.TemplateRenderer, libreOfficePath string, gotenbergURL string, client *http.Client) *DocumentService {
+	return &DocumentService{logger: logger, templateRenderer: templateRenderer, libreOfficePath: libreOfficePath, gotenbergURL: gotenbergURL, client: client}
 }
 
 func toMap(data any) (map[string]interface{}, error) {
@@ -52,39 +54,63 @@ func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestB
 
 	tmpHTML, err := os.CreateTemp("", "*.html")
 	if err != nil {
-		return nil, fmt.Errorf("error creating temp file: %w", err)
+		return nil, fmt.Errorf("error creating temp HTML file: %w", err)
 	}
 	defer func() {
 		if err := os.Remove(tmpHTML.Name()); err != nil {
-			s.logger.Warn("Failed to remove temporary HTML file")
-		}
-	}()
-
-	tmpDocx, err := os.CreateTemp("", "*.docx")
-	if err != nil {
-		return nil, fmt.Errorf("error creating temp file: %w", err)
-	}
-
-	defer func() {
-		if err := os.Remove(tmpDocx.Name()); err != nil {
-			s.logger.Warn("Failed to remove temporary docx file")
+			s.logger.Warn("error removing temp HTML file", tmpHTML.Name())
 		}
 	}()
 
 	if err := os.WriteFile(tmpHTML.Name(), []byte(renderedHTML), 0644); err != nil {
-		return nil, fmt.Errorf("error writing to temp file: %w", err)
+		return nil, fmt.Errorf("error writing HTML file: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, s.pandocPath, tmpHTML.Name(), "-o", tmpDocx.Name())
+	// Create temporary output directory for LibreOffice
+	tmpDir, err := os.MkdirTemp("", "libreoffice-out-*")
+	if err != nil {
+		return nil, fmt.Errorf("error creating temp dir: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			s.logger.Warn("error removing temp dir", tmpDir)
+		}
+	}()
+
+	// Run LibreOffice headless to convert HTML -> DOCX
+	cmd := exec.CommandContext(ctx, "soffice", "--headless", "--convert-to", "docx", tmpHTML.Name(), "--outdir", tmpDir)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("pandoc failed: %w, stderr: %s", err, stderr.String())
+		return nil, fmt.Errorf("LibreOffice conversion failed: %w, stderr: %s", err, stderr.String())
 	}
 
-	data, err := os.ReadFile(tmpDocx.Name())
+	// Check if LibreOffice produced any files
+	files, err := os.ReadDir(tmpDir)
 	if err != nil {
-		return nil, fmt.Errorf("error reading temp file: %w", err)
+		return nil, fmt.Errorf("error reading output directory: %w", err)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("LibreOffice did not produce a DOCX file, stderr: %s", stderr.String())
+	}
+
+	// Find the DOCX file (LibreOffice might add a prefix or use a different naming convention)
+	var docxPath string
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".docx") {
+			docxPath = filepath.Join(tmpDir, file.Name())
+			break
+		}
+	}
+
+	if docxPath == "" {
+		return nil, fmt.Errorf("no DOCX file found in output directory, files: %v", files)
+	}
+
+	data, err := os.ReadFile(docxPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading DOCX file: %w", err)
 	}
 
 	return &models.Document{

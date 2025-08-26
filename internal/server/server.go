@@ -37,7 +37,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) *Server {
 	}
 
 	templateRenderer := renderers.NewPongo2Renderer(cfg.TemplateDir)
-	newDocService := services.NewDocumentService(logger, templateRenderer, cfg.PandocPath, cfg.PDFConverterURL, httpClient)
+	newDocService := services.NewDocumentService(logger, templateRenderer, cfg.LibreOfficePath, cfg.PDFConverterURL, httpClient)
 	newDocHandler := handlers.NewDocumentHandler(newDocService)
 
 	server := &Server{

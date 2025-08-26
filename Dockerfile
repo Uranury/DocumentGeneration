@@ -1,49 +1,52 @@
-# Build stage
-FROM golang:1.23.1-alpine AS builder
+# ---- builder: build Go binary on Debian-based image ----
+FROM golang:1.23.1-bullseye AS builder
 
-# Install pandoc and other dependencies
-RUN apk add --no-cache pandoc git ca-certificates tzdata
+# build deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    tzdata \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy go mod and sum files
 COPY go.mod go.sum ./
-
-# Download dependencies
 RUN go mod download
 
-# Copy source code
 COPY . .
+# static-ish build; adjust if you rely on cgo
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/main ./cmd/api/main.go
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api/main.go
 
-# Final stage
-FROM alpine:latest
+# ---- runtime: Debian Bookworm slim with full LibreOffice + JRE ----
+FROM debian:bookworm-slim
 
-# Install pandoc and ca-certificates
-RUN apk --no-cache add pandoc ca-certificates tzdata
+# install reliable libreoffice and OpenJDK (headless), plus fonts
+RUN apt-get update && apt-get install -y \
+        libreoffice \
+        libreoffice-writer \
+        libreoffice-java-common \
+        openjdk-17-jre-headless \
+        fonts-dejavu-core \
+        fontconfig \
+        ca-certificates \
+        bash \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-WORKDIR /root/
+WORKDIR /opt/app
 
-# Copy the binary from builder stage
+# copy binary + templates
 COPY --from=builder /app/main .
-
-# Copy templates directory if you have one
 COPY --from=builder /app/templates ./templates
 
-# Create a non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+# create non-root user
+RUN groupadd -g 1001 appgroup \
+ && useradd -u 1001 -g appgroup -m appuser \
+ && chown -R appuser:appgroup /opt/app
 
-# Change ownership of the app directory
-RUN chown -R appuser:appgroup /root/
-
-# Switch to non-root user
 USER appuser
 
-# Expose port
+ENV PATH="/opt/app:${PATH}"
 EXPOSE 8080
 
-# Command to run the executable
 CMD ["./main"]

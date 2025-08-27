@@ -10,6 +10,7 @@ services:
       - STATIC_TOKEN=${STATIC_TOKEN}
       - PDF_CONVERTER_URL=http://gotenberg:3000
       - TEMPLATE_DIR=/opt/app/templates
+      - PYTHON_URL=http://python-templates:8000
     depends_on:
       gotenberg:
         condition: service_healthy

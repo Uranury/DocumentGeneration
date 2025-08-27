@@ -11,8 +11,6 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 )
 
 type DocumentService struct {
@@ -125,68 +123,5 @@ func (s *DocumentService) GenerateHTML(_ context.Context, req *models.RequestBod
 		Data:     []byte(renderedHTML),
 		Format:   models.FormatHTML,
 		Filename: "document.html",
-	}, nil
-}
-
-func (s *DocumentService) renderWithPython(ctx context.Context, code, format string, data any) ([]byte, string, error) {
-	route := "/docx/render" // For DOCX
-
-	// Open template file
-	templatePath := filepath.Join(s.templateDir, fmt.Sprintf("%s.%s", code, format))
-	file, err := os.Open(templatePath)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to open template: %w", err)
-	}
-	defer file.Close()
-
-	jsonData, _ := json.Marshal(data)
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, _ := writer.CreateFormFile("template", fmt.Sprintf("%s.%s", code, format))
-	io.Copy(part, file)
-
-	part, _ = writer.CreateFormFile("data", "data.json")
-	part.Write(jsonData)
-
-	writer.Close()
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, s.pythonURL+route, body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", fmt.Errorf("python service returned status %d", resp.StatusCode)
-	}
-
-	dataBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return dataBytes, string(models.FormatDOCX), nil
-}
-
-func (s *DocumentService) GenerateDOCX(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
-	dataMap, err := toMap(req.Data)
-	if err != nil {
-		return nil, fmt.Errorf("error converting data: %w", err)
-	}
-
-	dataBytes, _, err := s.renderWithPython(ctx, req.Code, "docx", dataMap)
-	if err != nil {
-		return nil, err
-	}
-
-	return &models.Document{
-		Data:     dataBytes,
-		Format:   models.FormatDOCX,
-		Filename: fmt.Sprintf("%s.docx", req.Code),
 	}, nil
 }

@@ -63,32 +63,29 @@ func (s *DocumentService) renderWithPython(ctx context.Context, code, format str
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
+	// template file
 	part, err := writer.CreateFormFile("template", fmt.Sprintf("%s.%s", code, format))
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create form file for template: %w", err)
 	}
-
 	if _, err := io.Copy(part, file); err != nil {
 		return nil, "", fmt.Errorf("failed to copy template: %w", err)
 	}
 
-	part, err = writer.CreateFormFile("data", "data.json")
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to create form file for data: %w", err)
-	}
-
-	if _, err := part.Write(jsonData); err != nil {
-		return nil, "", fmt.Errorf("failed to write json data: %w", err)
+	// data as a form field, not a file
+	if err := writer.WriteField("data", string(jsonData)); err != nil {
+		return nil, "", fmt.Errorf("failed to write data field: %w", err)
 	}
 
 	if err := writer.Close(); err != nil {
 		return nil, "", fmt.Errorf("failed to close writer: %w", err)
 	}
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.pythonURL+route, body)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
+	s.logger.Info("The request is being sent to endpoint:", s.pythonURL+route)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.client.Do(req)

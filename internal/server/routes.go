@@ -2,8 +2,9 @@ package server
 
 import (
 	"RBKproject4/internal/middleware"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func (s *Server) setupRoutes() {
@@ -16,6 +17,6 @@ func (s *Server) setupRoutes() {
 	docGeneration.Use(middleware.AuthMiddleware(s.Cfg.StaticToken))
 
 	docGeneration.POST("/generate-docx", s.DocumentHandler.GenerateDocument)
-	docGeneration.POST("/generate-xlsx", s.DocumentHandler.GenerateXlsx)
+	docGeneration.POST("/generate-xlsx", s.DocumentHandler.GenerateXLSX)
 	docGeneration.POST("/generate-html", s.DocumentHandler.GenerateHTML)
 }

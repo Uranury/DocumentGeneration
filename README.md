@@ -813,3 +813,42 @@ Proprietary software © Bank RBK. For internal use only.
   ]
 }
 ```
+{
+  "code": "CARD_STATEMENT_EXCEL",
+  "format": "xlsx",
+  "data": {
+    "date": "Дата формирования документа",
+    "accountNumber": "Номер счета",
+    "accountCurrency": "Валюта счета",
+    "cardName": "Kaspi gold",
+    "clientName": "Имя клиента",
+    "clientTaxCode": "ИИН/БИН клиента",
+    "statementDateFrom": "Начало периода выписки",
+    "statementDateTo": "Конец периода выписки",
+    "currentTime": "Текущая дата/время",
+    "blockedSum": "Заблокированная сумма",
+    "initialBalance": "Начальный остаток",
+    "income": "Сумма поступлений",
+    "expenses": "Сумма списаний",
+    "finalBalance": "Конечный остаток",
+    "transactions": [
+      {
+        "creationTime": "Дата операции",
+        "processingTime": "Дата обработки",
+        "description": "Описание операции",
+        "operationAmount": "Сумма операции в валюте операции",
+        "accountAmount": "Сумма операции в валюте карты",
+        "commission": "Комиссия по операции"
+      }
+    ],
+    "waitTransactions": [
+      {
+        "creationTime": "Дата операции",
+        "processingTime": "Дата обработки",
+        "description": "Описание операции",
+        "operationAmount": "Сумма операции в валюте операции",
+        "accountAmount": "Сумма операции в валюте карты"
+      }
+    ]
+  }
+}

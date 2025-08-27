@@ -43,6 +43,22 @@ services:
       retries: 3
       start_period: 20s
 
+  python-templates:
+    build:
+      context: ./python_template_service   
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"                       
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
 networks:
   app-network:
     driver: bridge

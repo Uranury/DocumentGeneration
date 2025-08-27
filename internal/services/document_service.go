@@ -15,20 +15,20 @@ import (
 
 type DocumentService struct {
 	templateRenderer renderers.TemplateRenderer
+	templateDir      string
 	gotenbergURL     string
 	gotenbergPDFURL  string
-	gotenbergDocxURL string
 	client           *http.Client
 	logger           *slog.Logger
 }
 
-func NewDocumentService(logger *slog.Logger, templateRenderer renderers.TemplateRenderer, gotenbergURL string, client *http.Client) *DocumentService {
+func NewDocumentService(logger *slog.Logger, templateRenderer renderers.TemplateRenderer, templateDir string, gotenbergURL string, client *http.Client) *DocumentService {
 	return &DocumentService{
 		logger:           logger,
+		templateDir:      templateDir,
 		templateRenderer: templateRenderer,
 		gotenbergURL:     gotenbergURL,
 		gotenbergPDFURL:  gotenbergURL + "/forms/chromium/convert/html",
-		gotenbergDocxURL: gotenbergURL + "/forms/libreoffice/convert?target=docx",
 		client:           client,
 	}
 }
@@ -43,66 +43,6 @@ func toMap(data any) (map[string]interface{}, error) {
 		return nil, err
 	}
 	return m, nil
-}
-
-func (s *DocumentService) GenerateDocx(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
-	dataMap, err := toMap(req.Data)
-	if err != nil {
-		return nil, fmt.Errorf("error converting data to map: %w", err)
-	}
-
-	renderedHTML, err := s.templateRenderer.Render(req.Code, dataMap)
-	if err != nil {
-		return nil, fmt.Errorf("error rendering html: %w", err)
-	}
-
-	buf := &bytes.Buffer{}
-	writer := multipart.NewWriter(buf)
-	part, err := writer.CreateFormFile("files", "input.html")
-	if err != nil {
-		return nil, fmt.Errorf("error creating form file: %w", err)
-	}
-
-	if _, err := part.Write([]byte(renderedHTML)); err != nil {
-		return nil, fmt.Errorf("error writing to form file: %w", err)
-	}
-
-	if err := writer.Close(); err != nil {
-		return nil, fmt.Errorf("error closing multipart writer: %w", err)
-	}
-
-	newReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.gotenbergDocxURL, buf)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
-	}
-
-	newReq.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := s.client.Do(newReq)
-	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			s.logger.Warn("failed to close response body")
-		}
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("gotenberg returned status %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
-	}
-
-	return &models.Document{
-		Data:     data,
-		Format:   models.FormatDOCX,
-		Filename: "document.docx",
-	}, nil
 }
 
 func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBody) (*models.Document, error) {

@@ -9,7 +9,7 @@ services:
       - LISTEN_ADDR=:8080
       - STATIC_TOKEN=${STATIC_TOKEN}
       - PDF_CONVERTER_URL=http://gotenberg:3000
-      - TEMPLATE_DIR=/root/templates
+      - TEMPLATE_DIR=/opt/app/templates
     depends_on:
       gotenberg:
         condition: service_healthy

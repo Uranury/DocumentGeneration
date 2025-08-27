@@ -51,7 +51,7 @@ func (s *DocumentService) renderWithPython(ctx context.Context, code, format str
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			s.logger.Warn("failed to close template file: %v", err)
+			s.logger.Warn("failed to close template file", "err", err)
 		}
 	}()
 
@@ -85,7 +85,7 @@ func (s *DocumentService) renderWithPython(ctx context.Context, code, format str
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
-	s.logger.Info("The request is being sent to endpoint:", s.pythonURL+route)
+	s.logger.Info("The request is being sent:", "endpoint", s.pythonURL+route)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := s.client.Do(req)
@@ -94,7 +94,7 @@ func (s *DocumentService) renderWithPython(ctx context.Context, code, format str
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			s.logger.Warn("failed to close response body: %v", err)
+			s.logger.Warn("failed to close response body", "err", err)
 		}
 	}()
 

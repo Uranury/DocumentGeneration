@@ -6,10 +6,11 @@ import (
 	"RBKproject4/internal/services"
 	"RBKproject4/pkg/config"
 	"context"
-	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Server struct {
@@ -54,7 +55,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) *Server {
 }
 
 func (s *Server) Run() error {
-	s.Logger.Info("Starting server at address...", s.Cfg.ListenAddr)
+	s.Logger.Info("Starting server", "address", s.Cfg.ListenAddr)
 	return s.HTTPServer.ListenAndServe()
 }
 

@@ -1,0 +1,32 @@
+stages:
+  - test
+  - build
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+
+test:go:
+  stage: test
+  image: golang:1.23.1
+  script:
+    - go mod download
+    - go test ./... -v
+
+build:images:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+
+    # Build Go app image
+    - docker build -t "$CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA" -f Dockerfile .
+
+    # Build Python service image
+    - docker build -t "$CI_REGISTRY_IMAGE/python-templates:$CI_COMMIT_SHA" -f python_template_service/Dockerfile ./python_template_service
+
+    # Push both
+    - docker push "$CI_REGISTRY_IMAGE/app:$CI_COMMIT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/python-templates:$CI_COMMIT_SHA"

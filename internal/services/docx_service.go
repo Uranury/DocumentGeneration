@@ -14,7 +14,7 @@ import (
 )
 
 func (s *DocumentService) GenerateDOCX(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
-	dataMap, err := toMap(req.Data)
+	dataMap, err := ToMap(req.Data)
 	if err != nil {
 		return nil, fmt.Errorf("error converting data: %w", err)
 	}

@@ -35,7 +35,7 @@ func NewDocumentService(logger *slog.Logger, templateRenderer renderers.Template
 	}
 }
 
-func toMap(data any) (map[string]interface{}, error) {
+func ToMap(data any) (map[string]interface{}, error) {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func toMap(data any) (map[string]interface{}, error) {
 }
 
 func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBody) (*models.Document, error) {
-	dataMap, err := toMap(req.Data)
+	dataMap, err := ToMap(req.Data)
 	if err != nil {
 		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}
@@ -109,7 +109,7 @@ func (s *DocumentService) GeneratePDF(ctx context.Context, req *models.RequestBo
 }
 
 func (s *DocumentService) GenerateHTML(_ context.Context, req *models.RequestBody) (*models.Document, error) {
-	dataMap, err := toMap(req.Data)
+	dataMap, err := ToMap(req.Data)
 	if err != nil {
 		return nil, fmt.Errorf("error converting data to map: %w", err)
 	}

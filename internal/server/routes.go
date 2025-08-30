@@ -19,4 +19,5 @@ func (s *Server) setupRoutes() {
 	docGeneration.POST("/generate-docx", s.DocumentHandler.GenerateDocument)
 	docGeneration.POST("/generate-xlsx", s.DocumentHandler.GenerateXLSX)
 	docGeneration.POST("/generate-html", s.DocumentHandler.GenerateHTML)
+	docGeneration.GET("/templates", s.DocumentHandler.ListTemplates)
 }

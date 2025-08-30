@@ -11,6 +11,9 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type DocumentService struct {
@@ -124,4 +127,25 @@ func (s *DocumentService) GenerateHTML(_ context.Context, req *models.RequestBod
 		Format:   models.FormatHTML,
 		Filename: "document.html",
 	}, nil
+}
+
+func (s *DocumentService) ListTemplates(_ context.Context) ([]*models.Template, error) {
+	result := make([]*models.Template, 0)
+
+	templates, err := os.ReadDir(s.templateDir)
+	if err != nil {
+		return nil, fmt.Errorf("error listing templates: %w", err)
+	}
+	for _, file := range templates {
+		if file.IsDir() {
+			continue
+		}
+		extension := filepath.Ext(file.Name())
+		filename := strings.TrimSuffix(file.Name(), extension)
+		extension = strings.TrimPrefix(extension, ".")
+
+		result = append(result, &models.Template{Name: filename, Format: extension})
+	}
+
+	return result, nil
 }

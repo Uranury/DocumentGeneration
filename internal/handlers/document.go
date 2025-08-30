@@ -111,3 +111,12 @@ func (h *DocumentHandler) GenerateXLSX(c *gin.Context) {
 
 	streamDocument(c, doc, err)
 }
+
+func (h *DocumentHandler) ListTemplates(c *gin.Context) {
+	templates, err := h.svc.ListTemplates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"templates": templates})
+}
